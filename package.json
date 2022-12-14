@@ -12,7 +12,7 @@
     "clean": "rimraf dist",
     "lint": "eslint 'src/**/*.{js,ts}?(x)' --fix",
     "dev": "act -W act.yml -r --use-gitignore=false",
-    "build:data": "rimraf data/* && cp ./node_modules/markdown-spellcheck/data/* ./data",
+    "build:data": "rimraf data && mkdir data && cp ./node_modules/markdown-spellcheck/data/* ./data",
     "build:dist": "ncc build src/index.ts --minify --v8-cache",
     "build": "run-p build:*",
     "prebuild": "run-s lint clean",
