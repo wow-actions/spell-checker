@@ -17,6 +17,9 @@ export async function getChangedFiles(octokit: Octokit) {
   let base: string | undefined
   let head: string | undefined
 
+  // eslint-disable-next-line no-console
+  console.log(eventName, context.payload)
+
   if (eventName === 'pull_request') {
     const pr = context.payload.pull_request!
     base = pr.base.sha
