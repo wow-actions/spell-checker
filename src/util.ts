@@ -11,48 +11,50 @@ export function getOctokit() {
 
 export async function getChangedFiles(octokit: Octokit) {
   const { context } = github
-  const pr = context.payload.pull_request
   const eventName = context.eventName
-  let files: {
-    sha: string
-    filename: string
-    status:
-      | 'added'
-      | 'removed'
-      | 'modified'
-      | 'renamed'
-      | 'copied'
-      | 'changed'
-      | 'unchanged'
-  }[]
 
-  if (pr) {
-    const { data } = await octokit.rest.pulls.listFiles({
-      ...context.repo,
-      pull_number: pr.number,
-    })
-    files = data
+  let base: string | undefined
+  let head: string | undefined
+
+  if (eventName === 'pull_request') {
+    const pr = context.payload.pull_request!
+    base = pr.base.sha
+    head = pr.head.sha
   } else if (eventName === 'push') {
-    const base: string = context.payload.before
-    const head: string = context.payload.after
-    const res = await octokit.rest.repos.compareCommits({
-      ...context.repo,
-      base,
-      head,
-    })
-    // Ensure that the head commit is ahead of the base commit.
-    if (res.data.status !== 'ahead') {
-      throw new Error(
-        `The head commit for this ${context.eventName} event is not ahead of the base commit. `,
-      )
-    }
-    files = res.data.files || []
+    base = context.payload.before
+    head = context.payload.after
   } else {
     throw new Error(
-      `This action only supports pull requests and pushes, ${context.eventName} events are not supported. ` +
+      `This action only supports pull requests and pushes, ${eventName} events are not supported. ` +
         "Please submit an issue on this action's GitHub repo if you believe this in correct.",
     )
   }
+
+  core.info(`Base commit: ${base}`)
+  core.info(`Head commit: ${head}`)
+
+  if (!base || !head) {
+    throw new Error(
+      `The base and head commits are missing from the payload for this ${eventName} event. ` +
+        "Please submit an issue on this action's GitHub repo.",
+    )
+  }
+
+  const res = await octokit.rest.repos.compareCommits({
+    ...context.repo,
+    base,
+    head,
+  })
+
+  // Ensure that the head commit is ahead of the base commit.
+  if (res.data.status !== 'ahead') {
+    core.setFailed(
+      `The head commit for this ${eventName} event is not ahead of the base commit. ` +
+        "Please submit an issue on this action's GitHub repo.",
+    )
+  }
+
+  const files = res.data.files || []
 
   return files.filter(
     ({ status }) => status === 'added' || status === 'modified',

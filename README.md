@@ -12,7 +12,7 @@
   <strong>Check and Annotate files with spelling suggestions to improve your spelling.</strong>
 </p>
 
-## 🚀 Usage
+## Usage
 
 Create a `.github/workflows/spell-checker.yml` file in the repository you want to install this action:
 
@@ -31,6 +31,21 @@ jobs:
             **/*.txt
 ```
 
-## 🔖 License
+### Inputs
+
+Various inputs are defined to let you configure the action:
+
+> Note: [Workflow command and parameter names are not case-sensitive](https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-commands-for-github-actions#about-workflow-commands).
+
+| Name | Description | Default |
+| --- | --- | --- |
+| `GITHUB_TOKEN` | The GitHub token for authentication | N/A |
+| `include` | File patterns to match files to check. | `[]` |
+| `exclude` | File patterns to ignore files. | `[]` |
+| `alex` | The options of [alex](https://www.npmjs.com/package/alex). Set `false` to disable it. | N/A |
+| `write-good` | The options of [write-good](https://www.npmjs.com/package/write-good). Set `false` to disable it. | N/A |
+| `markdown-spellcheck` | The options of [alex](https://www.npmjs.com/package/markdown-spellcheck). Set `false` to disable it. | N/A |
+
+## License
 
 The application code and associated documentation is under the [MIT License](LICENSE)
