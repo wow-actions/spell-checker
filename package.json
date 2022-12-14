@@ -1,17 +1,20 @@
 {
   "name": "spellchecker",
   "description": "Tips to Improve Your Spelling",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "dist/index.js",
   "files": [
     "dist",
+    "data",
     "action.yml"
   ],
   "scripts": {
     "clean": "rimraf dist",
     "lint": "eslint 'src/**/*.{js,ts}?(x)' --fix",
     "dev": "act -W act.yml -r --use-gitignore=false",
-    "build": "ncc build src/index.ts --minify --v8-cache",
+    "build:data": "rimraf data/* && cp ./node_modules/markdown-spellcheck/data/* ./data",
+    "build:dist": "ncc build src/index.ts --minify --v8-cache",
+    "build": "run-p build:*",
     "prebuild": "run-s lint clean",
     "prepare": "is-ci || husky install .husky"
   },
