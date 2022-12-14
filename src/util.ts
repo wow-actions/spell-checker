@@ -20,13 +20,38 @@ async function findPR(octokit: Octokit) {
 
   if (eventName === 'push') {
     const headCommit = payload.head_commit
-    const prs = await octokit.paginate(octokit.rest.pulls.list, {
-      ...context.repo,
-      state: 'all',
-      per_page: 100,
-    })
+    const list = (page?: number) =>
+      octokit.rest.pulls.list({
+        ...context.repo,
+        page,
+        state: 'all',
+        per_page: 100,
+      })
 
-    return prs.find((pr) => pr.head.sha === headCommit.id)
+    const res = await list()
+    const prs = res.data || []
+    const pr = prs.find((pr) => pr.head.sha === headCommit.id)
+    if (pr) {
+      return pr
+    }
+
+    const { link } = res.headers
+    const matches = link ? link.match(/[&|?]page=\d+/gim) : null
+    if (matches) {
+      const nums = matches.map((item) => parseInt(item.split('=')[1], 10))
+      const min = Math.min(...nums)
+      const max = Math.max(...nums)
+      for (let i = min; i <= max; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const { data } = await list(i)
+        if (data) {
+          const pr = data.find((pr) => pr.head.sha === headCommit.id)
+          if (pr) {
+            return pr
+          }
+        }
+      }
+    }
   }
 }
 
@@ -75,7 +100,6 @@ export async function getChangedFiles(octokit: Octokit) {
   }
 
   const files = res.data.files || []
-
   return files.filter(
     ({ status }) => status === 'added' || status === 'modified',
   )
@@ -222,7 +246,9 @@ export async function spellCheck(
   if (conclusion === 'success') {
     title = annotations.length ? 'Good Spelling' : 'Perfect Spelling'
     summary = annotations.length
-      ? `Found Spelling Suggestion${s(annotations.length)}`
+      ? `**${numSugs} suggestion${s(numSugs)}** ${
+          numSugs === 1 ? 'has' : 'have'
+        } been found in **${numSugFiles} file${s(numSugFiles)}**.`
       : 'No issues have been found, great job!'
   } else {
     title = `Found Spelling Error${s(numErrs)}`

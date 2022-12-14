@@ -12,7 +12,7 @@ export async function run() {
       exclude: { type: 'stringArray' },
     })
 
-    core.info(
+    core.debug(
       `changed files: ${JSON.stringify(
         changedFiles.map(({ filename }) => filename),
         null,
