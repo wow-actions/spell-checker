@@ -33,4 +33,4 @@ jobs:
 
 ## 🔖 License
 
-The scripts and documentation in this project are released under the [MIT License](LICENSE)
+The application code and associated documentation is under the [MIT License](LICENSE)

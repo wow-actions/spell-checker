@@ -135,18 +135,25 @@ export async function spellCheck(
   )
 
   let conclusion: Conclusion = 'success'
-  let numFiles = 0
-  let numSuggestions = 0
+  let numSugFiles = 0
+  let numSugs = 0
+  let numErrFiles = 0
+  let numErrs = 0
 
   const annotations: Annotations[] = []
 
   arr.forEach(({ filename, results }) => {
+    let hasError = false
+    let hasSuggestion = false
     if (results.length) {
-      numFiles += 1
-      numSuggestions += results.length
       results.forEach((result) => {
         if (result.type === 'failure') {
+          numErrs += 1
+          hasError = true
           conclusion = 'failure'
+        } else {
+          hasSuggestion = true
+          numSugs += 1
         }
 
         annotations.push({
@@ -158,19 +165,42 @@ export async function spellCheck(
         })
       })
     }
+
+    if (hasError) {
+      numErrFiles += 1
+    }
+    if (hasSuggestion) {
+      numSugFiles += 1
+    }
   })
 
   let summary = ''
   let title = ''
+  const s = (num: number) => (num === 1 ? '' : 's')
+
   if (conclusion === 'success') {
-    title = 'Perfect Spelling'
-    summary = 'No issues have been found, great job!'
+    title = annotations.length ? 'Good Spelling' : 'Perfect Spelling'
+    summary = annotations.length
+      ? `Found Spelling Suggestion${s(annotations.length)}`
+      : 'No issues have been found, great job!'
   } else {
-    const s = (num: number) => (num === 1 ? '' : 's')
-    title = 'Found Spelling Suggestions'
-    summary = `**${numSuggestions} suggestion${s(numSuggestions)}** ${
-      numSuggestions === 1 ? 'has' : 'have'
-    } been found in **${numFiles} file${s(numFiles)}**.`
+    title = `Found Spelling Error${s(numErrs)}`
+    const summarys: string[] = []
+    if (numErrs) {
+      summarys.push(
+        `**${numErrs} error${s(numErrs)}** ${
+          numErrs === 1 ? 'has' : 'have'
+        } been found in **${numErrFiles} file${s(numErrFiles)}**.`,
+      )
+    }
+    if (numSugs) {
+      summarys.push(
+        `**${numSugs} suggestion${s(numSugs)}** ${
+          numSugs === 1 ? 'has' : 'have'
+        } been found in **${numSugFiles} file${s(numSugFiles)}**.`,
+      )
+    }
+    summary = summarys.join('\n\n')
   }
 
   while (annotations.length) {
