@@ -5,7 +5,7 @@ export function pos(contents: string, index: number) {
   const startOfLineIndex = (() => {
     const x = lines.slice(0)
     x.splice(line - 1)
-    return x.join('\n').length + (x.length > 0)
+    return x.join('\n').length + (x.length > 0 ? 1 : 0)
   })()
 
   const col = index - startOfLineIndex
