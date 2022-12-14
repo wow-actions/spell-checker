@@ -46,7 +46,7 @@ export async function run() {
         },
       })
 
-      await spellCheck(octokit, data.id, filenames)
+      await spellCheck(octokit, data.id, targetFiles)
     }
   } catch (e) {
     core.error(e)

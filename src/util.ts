@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import { parsePatch } from './patch'
 import { check } from './providers'
 
 export type Octokit = ReturnType<typeof getOctokit>
@@ -78,7 +79,7 @@ type Conclusion =
   | 'timed_out'
   | 'action_required'
 
-const CHECK_NAME = 'SpellChecker'
+const CHECK_NAME = 'Spell Checker'
 
 export async function createCheck(
   octokit: Octokit,
@@ -108,7 +109,7 @@ export async function createCheck(
   })
 }
 
-export async function getFileContent(octokit: Octokit, filename: string) {
+async function getFileContent(octokit: Octokit, filename: string) {
   const { context } = github
   const pr = context.payload.pull_request
   const { data } = await octokit.rest.repos.getContent({
@@ -120,18 +121,37 @@ export async function getFileContent(octokit: Octokit, filename: string) {
   return Buffer.from((data as any).content, 'base64').toString()
 }
 
+function getPatchedLines(patch: string) {
+  const lines: number[] = []
+  parsePatch(patch).forEach(({ lineNumber }) => {
+    if (!lines.includes(lineNumber)) {
+      lines.push(lineNumber)
+    }
+  })
+  return lines
+}
+
 export async function spellCheck(
   octokit: Octokit,
   check_run_id: number,
-  files: string[],
+  files: { filename: string; patch?: string }[],
 ) {
   const arr = await Promise.all(
-    files.map(async (filename) => {
-      const content = await getFileContent(octokit, filename)
-      const results = check(content)
+    files.map(async ({ filename, patch }) => {
+      if (patch) {
+        const content = await getFileContent(octokit, filename)
+        const lines = getPatchedLines(patch)
+        const results = check(content).filter(({ line }) =>
+          lines.includes(line),
+        )
+        return {
+          filename,
+          results,
+        }
+      }
       return {
         filename,
-        results,
+        results: [],
       }
     }),
   )
