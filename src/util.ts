@@ -10,6 +10,26 @@ export function getOctokit() {
   return github.getOctokit(token)
 }
 
+async function findPR(octokit: Octokit) {
+  const { context } = github
+  const payload = context.payload
+  const eventName = context.eventName
+  if (eventName === 'pull_request') {
+    return payload.pull_request!
+  }
+
+  if (eventName === 'push') {
+    const headCommit = payload.head_commit
+    const prs = await octokit.paginate(octokit.rest.pulls.list, {
+      ...context.repo,
+      state: 'all',
+      per_page: 100,
+    })
+
+    return prs.find((pr) => pr.head.sha === headCommit.id)
+  }
+}
+
 export async function getChangedFiles(octokit: Octokit) {
   const { context } = github
   const eventName = context.eventName
@@ -17,16 +37,12 @@ export async function getChangedFiles(octokit: Octokit) {
   let base: string | undefined
   let head: string | undefined
 
-  // eslint-disable-next-line no-console
-  console.log(eventName, context)
-
-  if (eventName === 'pull_request') {
-    const pr = context.payload.pull_request!
-    base = pr.base.sha
-    head = pr.head.sha
-  } else if (eventName === 'push') {
-    base = context.payload.before
-    head = context.payload.after
+  if (eventName === 'pull_request' || eventName === 'push') {
+    const pr = await findPR(octokit)
+    if (pr) {
+      base = pr.base.sha
+      head = pr.head.sha
+    }
   } else {
     throw new Error(
       `This action only supports pull requests and pushes, ${eventName} events are not supported. ` +
