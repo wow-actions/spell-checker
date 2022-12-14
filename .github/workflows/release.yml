@@ -25,7 +25,6 @@ jobs:
         with:
           app_id: ${{ secrets.APP_ID }}
           private_key: ${{ secrets.PRIVATE_KEY }}
-          env_name: bot_token
 
       - name: 📦　Release
         uses: wow-actions/release-github-action@v1

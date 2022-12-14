@@ -17,7 +17,9 @@ jobs:
         with:
           app_id: ${{ secrets.APP_ID }}
           private_key: ${{ secrets.PRIVATE_KEY }}
-          env_name: bot_token
       - uses: ./
         with:
           GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
+          include: |
+            **/*.md
+            **/*.txt
