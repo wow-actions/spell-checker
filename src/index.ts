@@ -22,7 +22,13 @@ export async function run() {
       return included && !excluded
     })
 
-    core.info(`Checking: ${JSON.stringify(targetFiles, null, 2)}`)
+    core.info(
+      `Checking: ${JSON.stringify(
+        targetFiles.map(({ filename }) => filename),
+        null,
+        2,
+      )}`,
+    )
 
     if (targetFiles.length === 0) {
       await createCheck(octokit, {
