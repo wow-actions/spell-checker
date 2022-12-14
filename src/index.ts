@@ -22,13 +22,9 @@ export async function run() {
       return included && !excluded
     })
 
-    core.info(
-      `Checking: ${JSON.stringify(
-        targetFiles.map(({ filename }) => filename),
-        null,
-        2,
-      )}`,
-    )
+    const filenames = targetFiles.map(({ filename }) => filename)
+
+    core.info(`Checking: ${JSON.stringify(filenames, null, 2)}`)
 
     if (targetFiles.length === 0) {
       await createCheck(octokit, {
@@ -41,18 +37,16 @@ export async function run() {
         },
       })
     } else {
-      await createCheck(octokit, {
+      const { data } = await createCheck(octokit, {
         status: 'in_progress',
         started_at: new Date().toISOString(),
         output: {
           title: 'Checking',
-          summary: '',
+          summary: `Files: ${JSON.stringify(filenames, null, 2)}`,
         },
       })
-      await spellCheck(
-        octokit,
-        targetFiles.map(({ filename }) => filename),
-      )
+
+      await spellCheck(octokit, data.id, filenames)
     }
   } catch (e) {
     core.error(e)

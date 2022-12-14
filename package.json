@@ -15,7 +15,7 @@
     "build:data": "rimraf data && mkdir data && cp ./node_modules/markdown-spellcheck/data/* ./data",
     "build:dist": "ncc build src/index.ts --minify --v8-cache",
     "build": "run-p build:*",
-    "prebuild": "run-s lint clean",
+    "prebuild": "run-s clean",
     "prepare": "is-ci || husky install .husky"
   },
   "lint-staged": {

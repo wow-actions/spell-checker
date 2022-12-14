@@ -76,6 +76,8 @@ type Conclusion =
   | 'timed_out'
   | 'action_required'
 
+const CHECK_NAME = 'SpellChecker'
+
 export async function createCheck(
   octokit: Octokit,
   meta: {
@@ -95,9 +97,9 @@ export async function createCheck(
   const sha = pr ? pr.head.sha : context.payload.after
   const ref = pr ? pr.head.ref : context.payload.ref
 
-  await octokit.rest.checks.create({
+  return octokit.rest.checks.create({
     ...github.context.repo,
-    name: 'SpellChecker',
+    name: CHECK_NAME,
     head_sha: sha,
     head_branch: ref,
     ...meta,
@@ -116,7 +118,11 @@ export async function getFileContent(octokit: Octokit, filename: string) {
   return Buffer.from((data as any).content, 'base64').toString()
 }
 
-export async function spellCheck(octokit: Octokit, files: string[]) {
+export async function spellCheck(
+  octokit: Octokit,
+  check_run_id: number,
+  files: string[],
+) {
   const arr = await Promise.all(
     files.map(async (filename) => {
       const content = await getFileContent(octokit, filename)
@@ -124,6 +130,38 @@ export async function spellCheck(octokit: Octokit, files: string[]) {
       return {
         filename,
         results,
+      }
+    }),
+  )
+
+  await Promise.all(
+    arr.map(({ filename, results }) => async () => {
+      let annotations: Annotations[] = []
+      results.forEach((result) => {
+        if (result.type === 'failure') {
+          conclusion = 'failure'
+        }
+
+        annotations.push({
+          path: filename,
+          start_line: result.line,
+          end_line: result.line,
+          annotation_level: result.type || 'warning',
+          message: result.reason,
+        })
+      })
+
+      // No more than 50 items are allowed
+      if (annotations.length === 40) {
+        annotations = []
+
+        await octokit.rest.checks.update({
+          ...github.context.repo,
+          check_run_id,
+          output: {
+            annotations,
+          },
+        })
       }
     }),
   )
@@ -167,14 +205,20 @@ export async function spellCheck(octokit: Octokit, files: string[]) {
     } been found in **${numFiles} file${s(numFiles)}**.`
   }
 
-  await createCheck(octokit, {
-    conclusion,
-    status: 'completed',
-    completed_at: new Date().toISOString(),
-    output: {
-      title,
-      summary,
-      annotations,
-    },
-  })
+  while (annotations.length) {
+    const parts = annotations.splice(0, 50)
+    // eslint-disable-next-line no-await-in-loop
+    await octokit.rest.checks.update({
+      ...github.context.repo,
+      check_run_id,
+      conclusion,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      output: {
+        title,
+        summary,
+        annotations: parts,
+      },
+    })
+  }
 }
