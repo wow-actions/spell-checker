@@ -92,7 +92,7 @@ export async function createCheck(
 ) {
   const { context } = github
   const pr = context.payload.pull_request
-  const sha = pr ? pr.head.sha : context.payload.sha
+  const sha = pr ? pr.head.sha : context.payload.after
   const ref = pr ? pr.head.ref : context.payload.ref
 
   await octokit.rest.checks.create({
