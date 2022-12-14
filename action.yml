@@ -1,5 +1,5 @@
-name: SpellChecker
-description: Tips to Improve Your Spelling
+name: Spell Checker
+description: Check and Annotate files with spelling suggestions to improve your spelling
 author: bubkoo <bubkoo.wy@gmail.com>
 runs:
   using: node16

@@ -1,5 +1,5 @@
 {
-  "name": "spellchecker",
+  "name": "spell-checker",
   "description": "Tips to Improve Your Spelling",
   "version": "1.0.1",
   "main": "dist/index.js",
@@ -31,7 +31,7 @@
     "name": "bubkoo",
     "email": "bubkoo.wy@gmail.com"
   },
-  "repository": "https://github.com/wow-actions/spellchecker",
+  "repository": "https://github.com/wow-actions/spell-checker",
   "dependencies": {
     "@actions/core": "^1.10.0",
     "@actions/github": "^5.1.1",
