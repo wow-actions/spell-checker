@@ -67,6 +67,9 @@ export async function getChangedFiles(octokit: Octokit) {
     if (pr) {
       base = pr.base.sha
       head = pr.head.sha
+    } else {
+      base = context.payload.before
+      head = context.payload.after
     }
   } else {
     throw new Error(
