@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import { parsePatch } from './patch'
 import { check } from './providers'
 
 export type Octokit = ReturnType<typeof getOctokit>
@@ -9,51 +10,96 @@ export function getOctokit() {
   return github.getOctokit(token)
 }
 
+async function findPR(octokit: Octokit) {
+  const { context } = github
+  const payload = context.payload
+  const eventName = context.eventName
+  if (eventName === 'pull_request') {
+    return payload.pull_request!
+  }
+
+  if (eventName === 'push') {
+    const headCommit = payload.head_commit
+    const list = (page?: number) =>
+      octokit.rest.pulls.list({
+        ...context.repo,
+        page,
+        state: 'all',
+        per_page: 100,
+      })
+
+    const res = await list()
+    const prs = res.data || []
+    const pr = prs.find((pr) => pr.head.sha === headCommit.id)
+    if (pr) {
+      return pr
+    }
+
+    const { link } = res.headers
+    const matches = link ? link.match(/[&|?]page=\d+/gim) : null
+    if (matches) {
+      const nums = matches.map((item) => parseInt(item.split('=')[1], 10))
+      const min = Math.min(...nums)
+      const max = Math.max(...nums)
+      for (let i = min; i <= max; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const { data } = await list(i)
+        if (data) {
+          const pr = data.find((pr) => pr.head.sha === headCommit.id)
+          if (pr) {
+            return pr
+          }
+        }
+      }
+    }
+  }
+}
+
 export async function getChangedFiles(octokit: Octokit) {
   const { context } = github
-  const pr = context.payload.pull_request
   const eventName = context.eventName
-  let files: {
-    sha: string
-    filename: string
-    status:
-      | 'added'
-      | 'removed'
-      | 'modified'
-      | 'renamed'
-      | 'copied'
-      | 'changed'
-      | 'unchanged'
-  }[]
 
-  if (pr) {
-    const { data } = await octokit.rest.pulls.listFiles({
-      ...context.repo,
-      pull_number: pr.number,
-    })
-    files = data
-  } else if (eventName === 'push') {
-    const base: string = context.payload.before
-    const head: string = context.payload.after
-    const res = await octokit.rest.repos.compareCommits({
-      ...context.repo,
-      base,
-      head,
-    })
-    // Ensure that the head commit is ahead of the base commit.
-    if (res.data.status !== 'ahead') {
-      throw new Error(
-        `The head commit for this ${context.eventName} event is not ahead of the base commit. `,
-      )
+  let base: string | undefined
+  let head: string | undefined
+
+  if (eventName === 'pull_request' || eventName === 'push') {
+    const pr = await findPR(octokit)
+    if (pr) {
+      base = pr.base.sha
+      head = pr.head.sha
     }
-    files = res.data.files || []
   } else {
     throw new Error(
-      `This action only supports pull requests and pushes, ${context.eventName} events are not supported. ` +
+      `This action only supports pull requests and pushes, ${eventName} events are not supported. ` +
         "Please submit an issue on this action's GitHub repo if you believe this in correct.",
     )
   }
 
+  core.info(`Base commit: ${base}`)
+  core.info(`Head commit: ${head}`)
+
+  if (!base || !head) {
+    throw new Error(
+      `The base and head commits are missing from the payload for this ${eventName} event. ` +
+        "Please submit an issue on this action's GitHub repo.",
+    )
+  }
+
+  const res = await octokit.rest.repos.compareCommits({
+    ...context.repo,
+    base,
+    head,
+  })
+
+  // Ensure that the head commit is ahead of the base commit.
+  if (res.data.status !== 'ahead') {
+    core.setFailed(
+      `The head commit for this ${eventName} event is not ahead of the base commit. ` +
+        "Please submit an issue on this action's GitHub repo.",
+    )
+  }
+
+  const files = res.data.files || []
   return files.filter(
     ({ status }) => status === 'added' || status === 'modified',
   )
@@ -76,7 +122,7 @@ type Conclusion =
   | 'timed_out'
   | 'action_required'
 
-const CHECK_NAME = 'SpellChecker'
+const CHECK_NAME = 'Spell Checker'
 
 export async function createCheck(
   octokit: Octokit,
@@ -106,7 +152,7 @@ export async function createCheck(
   })
 }
 
-export async function getFileContent(octokit: Octokit, filename: string) {
+async function getFileContent(octokit: Octokit, filename: string) {
   const { context } = github
   const pr = context.payload.pull_request
   const { data } = await octokit.rest.repos.getContent({
@@ -118,35 +164,61 @@ export async function getFileContent(octokit: Octokit, filename: string) {
   return Buffer.from((data as any).content, 'base64').toString()
 }
 
+function getPatchedLines(patch: string) {
+  const lines: number[] = []
+  parsePatch(patch).forEach(({ lineNumber }) => {
+    if (!lines.includes(lineNumber)) {
+      lines.push(lineNumber)
+    }
+  })
+  return lines
+}
+
 export async function spellCheck(
   octokit: Octokit,
   check_run_id: number,
-  files: string[],
+  files: { filename: string; patch?: string }[],
 ) {
   const arr = await Promise.all(
-    files.map(async (filename) => {
-      const content = await getFileContent(octokit, filename)
-      const results = check(content)
+    files.map(async ({ filename, patch }) => {
+      if (patch) {
+        const content = await getFileContent(octokit, filename)
+        const lines = getPatchedLines(patch)
+        const results = check(content).filter(({ line }) =>
+          lines.includes(line),
+        )
+        return {
+          filename,
+          results,
+        }
+      }
       return {
         filename,
-        results,
+        results: [],
       }
     }),
   )
 
   let conclusion: Conclusion = 'success'
-  let numFiles = 0
-  let numSuggestions = 0
+  let numSugFiles = 0
+  let numSugs = 0
+  let numErrFiles = 0
+  let numErrs = 0
 
   const annotations: Annotations[] = []
 
   arr.forEach(({ filename, results }) => {
+    let hasError = false
+    let hasSuggestion = false
     if (results.length) {
-      numFiles += 1
-      numSuggestions += results.length
       results.forEach((result) => {
         if (result.type === 'failure') {
+          numErrs += 1
+          hasError = true
           conclusion = 'failure'
+        } else {
+          hasSuggestion = true
+          numSugs += 1
         }
 
         annotations.push({
@@ -154,23 +226,48 @@ export async function spellCheck(
           start_line: result.line,
           end_line: result.line,
           annotation_level: result.type || 'warning',
-          message: `${result.reason} (by [${result.name}](${result.url}))`,
+          message: `${result.reason}`,
         })
       })
+    }
+
+    if (hasError) {
+      numErrFiles += 1
+    }
+    if (hasSuggestion) {
+      numSugFiles += 1
     }
   })
 
   let summary = ''
   let title = ''
+  const s = (num: number) => (num === 1 ? '' : 's')
+
   if (conclusion === 'success') {
-    title = 'Perfect Spelling'
-    summary = 'No issues have been found, great job!'
+    title = annotations.length ? 'Good Spelling' : 'Perfect Spelling'
+    summary = annotations.length
+      ? `**${numSugs} suggestion${s(numSugs)}** ${
+          numSugs === 1 ? 'has' : 'have'
+        } been found in **${numSugFiles} file${s(numSugFiles)}**.`
+      : 'No issues have been found, great job!'
   } else {
-    const s = (num: number) => (num === 1 ? '' : 's')
-    title = 'Found Spelling Suggestions'
-    summary = `**${numSuggestions} suggestion${s(numSuggestions)}** ${
-      numSuggestions === 1 ? 'has' : 'have'
-    } been found in **${numFiles} file${s(numFiles)}**.`
+    title = `Found Spelling Error${s(numErrs)}`
+    const summarys: string[] = []
+    if (numErrs) {
+      summarys.push(
+        `**${numErrs} error${s(numErrs)}** ${
+          numErrs === 1 ? 'has' : 'have'
+        } been found in **${numErrFiles} file${s(numErrFiles)}**.`,
+      )
+    }
+    if (numSugs) {
+      summarys.push(
+        `**${numSugs} suggestion${s(numSugs)}** ${
+          numSugs === 1 ? 'has' : 'have'
+        } been found in **${numSugFiles} file${s(numSugFiles)}**.`,
+      )
+    }
+    summary = summarys.join('\n\n')
   }
 
   while (annotations.length) {

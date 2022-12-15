@@ -12,6 +12,14 @@ export async function run() {
       exclude: { type: 'stringArray' },
     })
 
+    core.debug(
+      `changed files: ${JSON.stringify(
+        changedFiles.map(({ filename }) => filename),
+        null,
+        2,
+      )}`,
+    )
+
     const targetFiles = changedFiles.filter(({ filename }) => {
       const included = include
         ? include.some((pattren) => minimatch(filename, pattren))
@@ -24,7 +32,7 @@ export async function run() {
 
     const filenames = targetFiles.map(({ filename }) => filename)
 
-    core.info(`Checking: ${JSON.stringify(filenames, null, 2)}`)
+    core.info(`checking files: ${JSON.stringify(filenames, null, 2)}`)
 
     if (targetFiles.length === 0) {
       await createCheck(octokit, {
@@ -46,7 +54,7 @@ export async function run() {
         },
       })
 
-      await spellCheck(octokit, data.id, filenames)
+      await spellCheck(octokit, data.id, targetFiles)
     }
   } catch (e) {
     core.error(e)
