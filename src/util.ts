@@ -226,7 +226,7 @@ export async function spellCheck(
           start_line: result.line,
           end_line: result.line,
           annotation_level: result.type || 'warning',
-          message: `${result.reason} (by [${result.name}](${result.url}))`,
+          message: `${result.reason}`,
         })
       })
     }
