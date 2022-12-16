@@ -1,4 +1,4 @@
-name: SpellChecker
+name: Spell Checker Action
 description: Check and Annotate files with spelling suggestions to help you write better
 author: bubkoo <bubkoo.wy@gmail.com>
 runs:
